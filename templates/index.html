@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>AnalysBan | صرافی اختصاصی OTC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <style>
+        :root { --gold: #D4AF37; --crimson: #990000; --dark: #0F0F0F; }
+        body { background: var(--dark); color: #FFF; font-family: system-ui; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(212, 175, 55, 0.1); }
+        .gold-gradient { background: linear-gradient(135deg, #D4AF37 0%, #F9E27D 100%); }
+        .crimson-btn { background: var(--crimson); transition: 0.3s; }
+        .crimson-btn:hover { background: #660000; transform: scale(1.02); }
+        input, select { background: rgba(0,0,0,0.5) !important; border: 1px solid #333 !important; color: white !important; }
+    </style>
+</head>
+<body class="p-4">
+    <!-- Header -->
+    <header class="max-w-4xl mx-auto flex justify-between items-center py-6 border-b border-gray-800">
+        <h1 class="text-3xl font-black tracking-tighter" style="color: var(--gold);">Analys<span class="text-white">Ban</span></h1>
+        <div id="price-widget" class="text-xs font-mono border border-yellow-900/30 px-3 py-1 rounded-full">
+            BTC: <span id="btc-price" class="text-green-500">...</span> | EUR/USDT: <span class="text-white">1.082</span>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto mt-10 grid gap-8 md:grid-cols-2">
+        <!-- فرم هوشمند -->
+        <div class="glass p-8 rounded-3xl animate__animated animate__fadeInLeft">
+            <h2 class="text-xl font-bold mb-6 flex items-center">
+                <span class="w-2 h-8 bg-red-700 ml-3 rounded-full"></span> ثبت سفارش P2P
+            </h2>
+            
+            <div class="space-y-5">
+                <select id="type" class="w-full p-4 rounded-xl">
+                    <option value="buy">قصد خرید دارم (پرداخت با یورو)</option>
+                    <option value="sell">قصد فروش دارم (دریافت یورو)</option>
+                </select>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <select id="currency" class="p-4 rounded-xl">
+                        <option value="USDT">Tether</option>
+                        <option value="BTC">Bitcoin</option>
+                        <option value="ETH">Ethereum</option>
+                    </select>
+                    <select id="network" class="p-4 rounded-xl">
+                        <option value="TRC20">TRC20</option>
+                        <option value="BEP20">BEP20</option>
+                        <option value="ERC20">ERC20</option>
+                    </select>
+                </div>
+
+                <input id="amount" type="number" placeholder="مقدار را وارد کنید" class="w-full p-4 rounded-xl">
+                <input id="address" type="text" placeholder="آدرس ولت مقصد یا شماره حساب" class="w-full p-4 rounded-xl">
+
+                <button onclick="processOrder()" class="w-full py-4 crimson-btn rounded-xl font-bold text-lg shadow-2xl">
+                    ایجاد تراکنش امن
+                </button>
+            </div>
+        </div>
+
+        <!-- بخش نمایش نتایج و پیگیری -->
+        <div class="space-y-6">
+            <div id="status-card" class="glass p-8 rounded-3xl hidden animate__animated animate__fadeInRight">
+                <div class="flex justify-between items-start mb-6">
+                    <span class="text-sm text-gray-400">کد رهگیری: <b id="display-id" class="text-white"></b></span>
+                    <span class="bg-yellow-600/20 text-yellow-500 text-[10px] px-2 py-1 rounded">در انتظار پرداخت</span>
+                </div>
+                
+                <div id="payment-box" class="bg-black/40 p-4 rounded-xl border border-yellow-900/20 mb-4">
+                    <p class="text-xs text-gray-400 mb-2">اطلاعات واریز:</p>
+                    <p id="payment-details" class="text-sm font-mono text-yellow-200"></p>
+                </div>
+
+                <div class="text-[10px] text-gray-500 break-all">
+                    Internal Hash: <span id="display-hash"></span>
+                </div>
+            </div>
+
+            <div class="glass p-8 rounded-3xl">
+                <h3 class="text-sm font-bold mb-4 text-gray-400 italic">چرا AnalysBan؟</h3>
+                <ul class="text-xs space-y-3">
+                    <li class="flex items-center"><i class="text-red-600 ml-2">✓</i> تسویه آنی پس از تایید مدیریت</li>
+                    <li class="flex items-center"><i class="text-red-600 ml-2">✓</i> نرخ مستقیم از بایننس بدون واسطه</li>
+                    <li class="flex items-center"><i class="text-red-600 ml-2">✓</i> امنیت تضمین شده با هشینگ اختصاصی</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // WebSocket قیمت زنده
+        const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
+        ws.onmessage = (e) => {
+            const d = JSON.parse(e.data);
+            document.getElementById('btc-price').innerText = Math.round(d.c).toLocaleString() + ' $';
+        };
+
+        async function processOrder() {
+            const payload = {
+                type: document.getElementById('type').value,
+                currency: document.getElementById('currency').value,
+                network: document.getElementById('network').value,
+                amount: document.getElementById('amount').value,
+                address: document.getElementById('address').value
+            };
+
+            const res = await fetch('/api/order', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            
+            const data = await res.json();
+            if(data.status === 'success') {
+                document.getElementById('status-card').classList.remove('hidden');
+                document.getElementById('display-id').innerText = data.order.tx_id;
+                document.getElementById('display-hash').innerText = data.order.hash;
+                
+                if(payload.type === 'buy') {
+                    document.getElementById('payment-details').innerText = "لطفا به حساب {{ bank }} واریز کنید.";
+                } else {
+                    document.getElementById('payment-details').innerText = "لطفا ارز را به ولت اختصاصی صرافی ارسال کنید.";
+                }
+            }
+        }
+    </script>
+</body>
+</html>
